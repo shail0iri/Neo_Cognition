@@ -35,17 +35,12 @@ python src/realtime/webcam_fusion.py
 
  Real-time webcam inference using OpenCV + MediaPipe
 
- Eye-state classification (CNN) trained on CEW (Closed Eyes in the Wild)
-
- Temporal drowsiness modeling using NTHU Drowsy Driver Dataset
-
- Attention estimation from gaze and blink dynamics (MPIIGaze)
-
- Multimodal fusion engine combining CNN outputs and temporal ML models
-
- Evaluation & visualization (confusion matrices, training curves)
-
- Modular architecture with clean separation of preprocessing, training, fusion, and inference
+ - Eye-state classification (CNN) trained on CEW (Closed Eyes in the Wild)
+ - Temporal drowsiness modeling using NTHU Drowsy Driver Dataset
+ - Attention estimation from gaze and blink dynamics (MPIIGaze)
+ - Multimodal fusion engine combining CNN outputs and temporal ML models
+ - Evaluation & visualization (confusion matrices, training curves)
+ - Modular architecture with clean separation of preprocessing, training, fusion, and inference
 
 
 System Architecture 

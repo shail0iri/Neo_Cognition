@@ -68,21 +68,20 @@ System Architecture
 Datasets Used
 
 This project integrates multiple public datasets:
-
-Dataset	Purpose
-CEW	Eye-state classification
-NTHU DDD	Temporal drowsiness detection
-MPIIGaze	Gaze & attention estimation
-Eyeblink8	Blink dynamics
-CLAS	Cognitive load annotations
+- Dataset	Purpose
+- CEW	Eye-state classification
+- NTHU DDD	Temporal drowsiness detection
+- MPIIGaze	Gaze & attention estimation
+- Eyeblink8	Blink dynamics
+- CLAS	Cognitive load annotations
 
 ⚠️ Due to size and licensing restrictions, datasets are not included in this repository.
 
 Installation Requirements
 
-Python 3.8+
-Webcam (for real-time inference)
-8GB+ RAM recommended
+- Python 3.8+
+- Webcam (for real-time inference)
+- 8GB+ RAM recommended
 
 Usage
 1️⃣ Train individual models
@@ -121,12 +120,12 @@ automotive safety, HCI, and applied AI research.
 
 🛠️ Tech Stack
 
-Computer Vision: OpenCV, MediaPipe
-Deep Learning: TensorFlow / Keras, PyTorch
-Machine Learning: Scikit-learn, XGBoost
-Data Processing: NumPy, Pandas, Matplotlib
-Real-Time UI: Streamlit
-Development: Python, Git
+- Computer Vision: OpenCV, MediaPipe
+- Deep Learning: TensorFlow / Keras, PyTorch
+- Machine Learning: Scikit-learn, XGBoost
+- Data Processing: NumPy, Pandas, Matplotlib
+- Real-Time UI: Streamlit
+- Development: Python, Git
 
 🤝 Contributing
 

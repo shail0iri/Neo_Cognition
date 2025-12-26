@@ -52,8 +52,8 @@ System Architecture
                    │
           ┌────────┴────────┐
           ▼                 ▼
-     Eye ROI           Temporal Features
-   (CEW CNN)     (Blink, EAR, Gaze)
+     Eye ROI           Temporal Features 
+     (CEW CNN)     (Blink, EAR, Gaze)
           │                 │
           └────────┬────────┘
                    ▼
@@ -99,9 +99,7 @@ CLAS	Cognitive load annotations
 Installation Requirements
 
 Python 3.8+
-
 Webcam (for real-time inference)
-
 8GB+ RAM recommended
 
 Usage
@@ -119,31 +117,22 @@ python src/realtime/webcam_fusion.py
 
 Results & Evaluation
 
-Eye-state CNN shows robust performance across varying lighting conditions
-
-Temporal models improve drowsiness detection over frame-level approaches
-
-Multimodal fusion produces smoother and more reliable cognitive estimates
-
-Real-time inference runs efficiently on CPU-based systems
-
-Evaluation artifacts (confusion matrices, training curves) are generated locally.
+- Eye-state CNN shows robust performance across varying lighting conditions
+- Temporal models improve drowsiness detection over frame-level approaches
+- Multimodal fusion produces smoother and more reliable cognitive estimates
+- Real-time inference runs efficiently on CPU-based systems
+- Evaluation artifacts (confusion matrices, training curves) are generated locally.
 
 🧩 Why This Project Matters
 
 Most ML projects stop at single-model training.
-
 Neo-Cognition focuses on:
 
-System-level ML engineering
-
-Multimodal reasoning
-
-Temporal modeling
-
-Real-time deployment
-
-Clean, maintainable code structure
+- System-level ML engineering
+- Multimodal reasoning
+- Temporal modeling
+- Real-time deployment
+- Clean, maintainable code structure
 
 This makes it closer to production-style cognitive AI systems used in
 automotive safety, HCI, and applied AI research.
@@ -151,28 +140,20 @@ automotive safety, HCI, and applied AI research.
 🛠️ Tech Stack
 
 Computer Vision: OpenCV, MediaPipe
-
 Deep Learning: TensorFlow / Keras, PyTorch
-
 Machine Learning: Scikit-learn, XGBoost
-
 Data Processing: NumPy, Pandas, Matplotlib
-
 Real-Time UI: Streamlit
-
 Development: Python, Git
 
 🤝 Contributing
 
 Contributions are welcome.
 
-Fork the repository
-
-Create a feature branch
-
-Commit your changes
-
-Open a Pull Request
+- Fork the repository
+- Create a feature branch
+- Commit your changes
+- Open a Pull Request
 
 👤 Author
 
@@ -182,15 +163,3 @@ AI / ML Engineer — Computer Vision • Multimodal Systems • Real-Time AI
 GitHub: https://github.com/shail0iri
 
 ⭐ If you find this project useful, please consider starring the repository.
-
-
----
-
-## ✅ FINAL STEP (DON’T SKIP)
-
-After pasting:
-
-```bash
-git add README.md
-git commit -m "Add cleaned and accurate project README"
-git push

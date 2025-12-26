@@ -63,24 +63,6 @@ System Architecture
         Cognitive State Estimation
      (Alertness • Drowsiness • Attention)
 
-Project Structure
-neo_cognition/
-├── src/
-│   ├── preprocess/     # Dataset-specific preprocessing pipelines
-│   ├── fusion/         # Fusion dataset creation & fusion models
-│   └── realtime/       # Real-time inference & dashboard
-│
-├── scripts/            # Training & testing scripts
-├── notebooks/          # EDA and experimentation
-│
-├── data/               # Raw datasets (ignored on GitHub)
-├── outputs/            # Generated features & artifacts (ignored)
-├── models/             # Trained model checkpoints (ignored)
-├── reports/            # Metrics & plots (ignored)
-│
-├── requirements.txt
-├── .gitignore
-└── README.md
 ⚠️ Large artifacts (data/, outputs/, models/, reports/) are intentionally excluded from version control.
 
 Datasets Used

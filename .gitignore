@@ -1,0 +1,27 @@
+# ===============================
+# Python
+# ===============================
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# ===============================
+# Virtual Environment
+# ===============================
+venv/
+.env/
+
+# ===============================
+# Data & Artifacts (DO NOT UPLOAD)
+# ===============================
+data/raw/
+data/processed/
+outputs/
+models/
+reports/
+
+# ===============================
+# OS junk
+# ===============================
+.DS_Store
+Thumbs.db

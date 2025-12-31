@@ -5,6 +5,15 @@
 ![Status](https://img.shields.io/badge/status-active-success.svg)
 ![Multimodal](https://img.shields.io/badge/multimodal-AI-orange.svg)
 
+## 🎥 Live Demo (Real-Time Execution)
+This project runs fully locally to preserve FPS and real-time accuracy.
+**Live Screenshots (Real Execution):**
+![Live UI](assets/demo_live_ui.png)
+![Blink Detection](assets/demo_blink_detection.png)
+
+📄 **Sample Output (CSV logging):**
+- `assets/sample_session.csv`
+
 Neo-Cognition is an end-to-end **multimodal AI system** that estimates human cognitive states such as **alertness, drowsiness, attention, and fatigue** in real time using **visual cues and temporal dynamics**.
 
 The project is designed as a **full ML engineering pipeline**, covering:

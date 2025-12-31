@@ -1,5 +1,5 @@
-# 🧠 Neo-Cognition  
-### Multimodal Real-Time Cognitive State Estimation
+# Neo-Cognition  
+### Multimodal Real-Time Cognitive State Estimation (Computer Vision + Temporal AI)
 
 ![Python](https://img.shields.io/badge/python-3.8+-blue.svg)
 ![Status](https://img.shields.io/badge/status-active-success.svg)
@@ -27,20 +27,30 @@ source venv/bin/activate        # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 
 # Run real-time demo
-python src/realtime/webcam_fusion.py
+python src/realtime/realtime_cognition.py
 
 ```
 
- Features
+📌 Note:
+ This is a local real-time system. Webcam-based perception is intentionally not deployed on the web to preserve FPS, latency, and correctness.
+ 
+Features
 
- Real-time webcam inference using OpenCV + MediaPipe
-
- - Eye-state classification (CNN) trained on CEW (Closed Eyes in the Wild)
- - Temporal drowsiness modeling using NTHU Drowsy Driver Dataset
- - Attention estimation from gaze and blink dynamics (MPIIGaze)
- - Multimodal fusion engine combining CNN outputs and temporal ML models
- - Evaluation & visualization (confusion matrices, training curves)
- - Modular architecture with clean separation of preprocessing, training, fusion, and inference
+- Real-time webcam inference using OpenCV + MediaPipe Face Mesh
+- Robust blink detection using EAR + temporal hysteresis
+- Eye-state dynamics (open / closed) with noise-resistant smoothing
+- Blink rate estimation using rolling time windows
+- Cognitive state estimation:
+  Attention
+  Fatigue
+  Stress
+  Cognitive load
+- CSV logging for runtime metrics and offline analysis
+- Modular architecture with clean separation of:
+  Vision processing
+  Temporal logic
+  Cognitive estimation
+  Visualization
 
 
 System Architecture 
@@ -52,8 +62,8 @@ System Architecture
                    │
           ┌────────┴────────┐
           ▼                 ▼
-     Eye ROI           Temporal Features 
-     (CEW CNN)     (Blink, EAR, Gaze)
+     Eye Geometry           Temporal Features 
+     (EAR, Eye State)       (Blink Rate, Variance)
           │                 │
           └────────┬────────┘
                    ▼
@@ -61,21 +71,47 @@ System Architecture
                    │
                    ▼
         Cognitive State Estimation
-     (Alertness • Drowsiness • Attention)
+     (Stress • Drowsiness • Attention • Load)
 
-⚠️ Large artifacts (data/, outputs/, models/, reports/) are intentionally excluded from version control.
+Real-Time Engineering Challenges Addressed :
+
+This project focuses heavily on real-time robustness, not just accuracy:
+- Hysteresis-based blink detection to avoid false positives
+- Explicit blink state machine (OPEN → CLOSED → OPEN)
+- Temporal smoothing of EAR to reduce jitter
+- Blink duration validation (min/max duration constraints)
+- Rolling window blink-rate computation (blinks/min)
+- CPU-optimized MediaPipe configuration for higher FPS
+- Stable performance without backend servers or web latency
+
+🧾 Runtime CSV Logging
+
+During real-time execution, the system logs metrics to CSV, including:
+- Timestamp
+- EAR (Eye Aspect Ratio)
+- Blink count and blink rate
+- Attention, fatigue, stress, cognitive load
+- Session duration
+This enables:
+- Offline analysis
+- Debugging temporal behavior
+- Visualization of cognitive trends
+- Dataset creation for future model training
+Important:
+- CSV logging is currently used for recording and inspection only.
+- Automated analysis, visualization, or dashboards are intentionally not included yet and are planned as future extensions.
+- Large artifacts (data/, outputs/, models/, reports/) are intentionally excluded from version control.
 
 Datasets Used
 
 This project integrates multiple public datasets:
-- Dataset	Purpose
 - CEW	Eye-state classification
-- NTHU DDD	Temporal drowsiness detection
+- NTHU DDD	Temporal drowsiness modeling
 - MPIIGaze	Gaze & attention estimation
 - Eyeblink8	Blink dynamics
 - CLAS	Cognitive load annotations
 
-⚠️ Due to size and licensing restrictions, datasets are not included in this repository.
+Due to size and licensing restrictions, datasets are not included in this repository.
 
 Installation Requirements
 
@@ -90,11 +126,8 @@ python scripts/train_cew_cnn_learning.py
 python scripts/train_nthu_temporal.py
 python scripts/train_attention_model_mpii.py
 
-2️⃣ Test multimodal fusion
-python scripts/test_fusion_cew_nthu.py
-
-3️⃣ Run real-time system
-python src/realtime/webcam_fusion.py
+2️⃣ Run real-time system
+python src/realtime/realtime_cognition.py
 
 Results & Evaluation
 
@@ -112,7 +145,7 @@ Neo-Cognition focuses on:
 - System-level ML engineering
 - Multimodal reasoning
 - Temporal modeling
-- Real-time deployment
+- Real-time constraints
 - Clean, maintainable code structure
 
 This makes it closer to production-style cognitive AI systems used in
@@ -121,10 +154,10 @@ automotive safety, HCI, and applied AI research.
 🛠️ Tech Stack
 
 - Computer Vision: OpenCV, MediaPipe
-- Deep Learning: TensorFlow / Keras, PyTorch
-- Machine Learning: Scikit-learn, XGBoost
+- Deep Learning(training): TensorFlow / Keras, PyTorch
+- Machine Learning: Scikit-learn, Numpy
 - Data Processing: NumPy, Pandas, Matplotlib
-- Real-Time UI: Streamlit
+- Runtime: Python (CPU-optimized)
 - Development: Python, Git
 
 🤝 Contributing
@@ -139,7 +172,7 @@ Contributions are welcome.
 👤 Author
 
 Shail Giri
-AI / ML Engineer — Computer Vision • Multimodal Systems • Real-Time AI
+ML Engineer — Computer Vision • Multimodal Systems • Real-Time AI
 
 GitHub: https://github.com/shail0iri
 

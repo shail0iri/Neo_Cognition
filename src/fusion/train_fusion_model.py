@@ -1,11 +1,4 @@
 # src/fusion/train_fusion_model.py
-"""
-Train the multimodal fusion model on outputs/fusion/fusion_dataset.csv
-
-Outputs:
-  - models/fusion/fusion_model.pt
-  - outputs/fusion/fusion_scaler.json  (mean/std per column)
-"""
 import os
 import json
 import numpy as np
@@ -16,7 +9,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 import torch.optim as optim
 import torch.nn as nn
-from fusion_model import MultimodalFusionNet
+from src.fusion.fusion_model import MultimodalFusionNet
 
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -38,9 +31,7 @@ id_cols = [c for c in ['dataset','participant_id','block_id'] if c in df.columns
 feature_cols = [c for c in df.columns if c not in id_cols]
 
 # For training, we need targets. Since fusion rows come from multiple datasets,
-# we may not have ground-truth cognitive labels. For demo, we will:
-# - If 'cognitive_label' present in CSV use it
-# - Else we create synthetic pseudo-labels (NOT ideal). Replace with real labels later.
+# we'll use the first available cognitive label column as target.
 target_col = None
 for t in ['cognitive_load', 'cognitive', 'label_cognitive']:
     if t in df.columns:

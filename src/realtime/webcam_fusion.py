@@ -1,5 +1,6 @@
-# src/webcam_fusion_fixed.py
+# Real-Time Drowsiness and Cognitive State Detection with Fusion Model
 
+from email.mime import text
 import cv2
 import numpy as np
 import mediapipe as mp
@@ -10,22 +11,65 @@ import os
 import math
 import joblib
 import warnings
-warnings.filterwarnings("ignore", category=UserWarning , module="sklearn")   
+warnings.filterwarnings("ignore", category=UserWarning, module="sklearn")   
 
-# Add the parent directory to Python path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# ==================== IMPORT PATHS ====================
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(os.path.dirname(current_dir))  
 
-try:
-    from src.fusion_cew_nthu import FusionCEWNTHU
-    print("✅ Fusion engine imported successfully")
-except Exception as e:
-    print(f"❌ Fusion engine import failed: {e}")
-    sys.exit(1)
+sys.path.insert(0, project_root)
+
+# Try multiple import paths for FusionCEWNTHU
+fusion_engine = None
+import_attempts = [
+    "src.fusion_cew_nthu",  # From src folder
+    "fusion_cew_nthu",      # Direct import
+    "models.fusion_cew_nthu",  # From models folder
+]
+
+for module_path in import_attempts:
+    try:
+        module = __import__(module_path, fromlist=['FusionCEWNTHU'])
+        fusion_engine = getattr(module, 'FusionCEWNTHU')
+        print(f"✅ Fusion engine imported from: {module_path}")
+        break
+    except ImportError:
+        continue
+
+if fusion_engine is None:
+    print(" Creating dummy FusionCEWNTHU class")
+    class FusionCEWNTHU:
+        def predict_from_eye_and_features(self, eye_roi, features):
+            return {
+                "state_label": "🟢 ALERT",
+                "fatigue_score": 0.1,
+                "eye_open_prob": 0.9,
+                "drowsy_prob": 0.1,
+            }
+    fusion_engine = FusionCEWNTHU
+
+
+# ==================== CONFIG ====================
+DEFAULT_EAR_THRESHOLD = 0.20
+MIN_BLINK_DURATION = 0.1
+MAX_BLINK_DURATION = 0.4  # Normal blinks are 100-400ms
+
+# Eye landmarks
+LEFT_EYE_EAR = {
+    "p1": 33, "p4": 133,
+    "p2": 159, "p6": 145,
+    "p3": 158, "p5": 153
+}
+RIGHT_EYE_EAR = {
+    "p1": 362, "p4": 263,
+    "p2": 386, "p6": 374,
+    "p3": 385, "p5": 380
+}
 
 
 class RealTimeFusionDetector:
     def __init__(self):
-        print("🚀 Initializing Real-Time Fusion Detector...")
+        print(" Initializing Real-Time Fusion Detector...")
 
         # Base dir (project root)
         self.base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -42,16 +86,23 @@ class RealTimeFusionDetector:
             min_tracking_confidence=0.5,
         )
 
-        # Eye landmark indices (same as preprocess)
-        self.LEFT_EYE_INDICES = [33, 7, 163, 144, 145, 153, 154, 155, 133,
-                                 173, 157, 158, 159, 160, 161, 246]
-        self.RIGHT_EYE_INDICES = [362, 382, 381, 380, 374, 373, 390, 249,
-                                  263, 466, 388, 387, 386, 385, 384, 398]
-
-        # Temporal buffers
-        self.ear_buffer = deque(maxlen=30)
-        self.blink_buffer = deque(maxlen=150)
-        self.gaze_history = deque(maxlen=30)  # for attention metrics
+        # ========== BLINK DETECTION STATE ==========
+        self.ear_threshold = DEFAULT_EAR_THRESHOLD  # SINGLE SOURCE OF TRUTH
+        
+        # Blink tracking with hysteresis
+        self.total_blinks = 0
+        self.blink_state = "OPEN"
+        self.blink_start_time = 0
+        self.blink_timestamps = []  # List of all blink times
+        
+        # For rate calculation
+        self.last_minute_blinks = deque(maxlen=100)
+        
+        # EAR history for smoothing
+        self.ear_history = deque(maxlen=10)
+        
+        # ========== TEMPORAL BUFFERS ==========
+        self.gaze_history = deque(maxlen=30)
         self.frame_count = 0
 
         # Attention model stuff
@@ -73,65 +124,105 @@ class RealTimeFusionDetector:
         ]
         self._load_attention_model()
 
-        print("✅ Real-Time Fusion Detector Ready!")
+        print(" Real-Time Fusion Detector Ready!")
+
+    # ---------------- EAR CALCULATION ----------------
+    def calculate_ear(self, landmarks, eye, w, h):
+        def pt(i):
+            return np.array([landmarks[i].x * w, landmarks[i].y * h])
+
+        p1, p2, p3 = pt(eye["p1"]), pt(eye["p2"]), pt(eye["p3"])
+        p4, p5, p6 = pt(eye["p4"]), pt(eye["p5"]), pt(eye["p6"])
+
+        A = np.linalg.norm(p2 - p6)
+        B = np.linalg.norm(p3 - p5)
+        C = np.linalg.norm(p1 - p4)
+        
+        return (A + B) / (2.0 * C) if C > 1e-6 else 0.0
+
+    # ---------------- BLINK DETECTION ----------------
+    def detect_blink(self, ear_smooth, current_time):
+        """Accurate blink detection with single threshold source"""
+        blink_detected_now = False
+        
+        # Use instance variables for thresholds
+        close_threshold = self.ear_threshold
+        open_threshold = self.ear_threshold + 0.02  # Hysteresis: need to open slightly more
+        
+        # State machine for blink detection
+        if ear_smooth < close_threshold and self.blink_state == "OPEN":
+            # Eye just closed - start potential blink
+            self.blink_state = "CLOSED"
+            self.blink_start_time = current_time
+            
+        elif ear_smooth > open_threshold and self.blink_state == "CLOSED":
+            # Eye just opened - check if it was a valid blink
+            blink_duration = current_time - self.blink_start_time
+            
+            # Validate blink duration
+            if MIN_BLINK_DURATION <= blink_duration <= MAX_BLINK_DURATION:
+                # VALID BLINK DETECTED!
+                self.total_blinks += 1
+                self.blink_timestamps.append(current_time)
+                self.last_minute_blinks.append(current_time)
+                blink_detected_now = True
+                print(f"Blink #{self.total_blinks} - Duration: {blink_duration:.3f}s")
+            
+            # Reset state regardless
+            self.blink_state = "OPEN"
+        
+        return blink_detected_now
+
+    def calculate_blink_rate(self):
+        """Calculate blinks per minute from last 60 seconds (time-based)"""
+        current_time = time.time()
+        
+        # Clean old blinks (older than 60 seconds)
+        self.blink_timestamps = [t for t in self.blink_timestamps 
+                               if current_time - t <= 60.0]
+        self.last_minute_blinks = deque(
+            [t for t in self.last_minute_blinks if current_time - t <= 60.0],
+            maxlen=100
+        )
+        
+        # Use last_minute_blinks for recent rate calculation
+        if len(self.last_minute_blinks) >= 2:
+            time_window = current_time - min(self.last_minute_blinks)
+            if time_window > 5:  # Need at least 5 seconds of data
+                rate = (len(self.last_minute_blinks) / time_window) * 60.0
+                return max(0.0, min(60.0, rate))
+        
+        # Fallback: overall rate
+        if len(self.blink_timestamps) >= 2:
+            total_time = current_time - min(self.blink_timestamps)
+            if total_time > 0:
+                rate = (len(self.blink_timestamps) / total_time) * 60.0
+                return max(0.0, min(60.0, rate))
+        
+        return 0.0
 
     # ---------------- ATTENTION MODEL LOADING ----------------
-
     def _load_attention_model(self):
         try:
             models_dir = os.path.join(self.base_dir, "outputs", "models_mpiigaze")
             model_path = os.path.join(models_dir, "attention_xgb.pkl")
             scaler_path = os.path.join(models_dir, "attention_scaler.pkl")
-            features_path = os.path.join(models_dir, "attention_features.txt")
 
             if not (os.path.exists(model_path) and os.path.exists(scaler_path)):
-                print("⚠️ Attention model artifacts not found, attention disabled.")
+                print("Attention model artifacts not found, attention disabled.")
                 self.attention_enabled = False
                 return
 
             self.attention_model = joblib.load(model_path)
             self.attention_scaler = joblib.load(scaler_path)
-
-            if os.path.exists(features_path):
-                with open(features_path, "r") as f:
-                    self.attention_features = [line.strip() for line in f if line.strip()]
-
             self.attention_enabled = True
-            print("🧠 Attention model loaded successfully!")
+            print("Attention model loaded successfully!")
 
         except Exception as e:
-            print(f"⚠️ Failed to load attention model: {e}")
+            print(f"Failed to load attention model: {e}")
             self.attention_enabled = False
 
-    # ---------------- LOW-LEVEL METRICS ----------------
-
-    def calculate_ear(self, eye_points):
-        """Calculate Eye Aspect Ratio"""
-        try:
-            if eye_points.shape[0] < 6:
-                return 0.25
-
-            p0, p1, p2, p3, p4, p5 = (
-                eye_points[0],
-                eye_points[1],
-                eye_points[2],
-                eye_points[3],
-                eye_points[4],
-                eye_points[5],
-            )
-
-            A = np.linalg.norm(p1 - p5)
-            B = np.linalg.norm(p2 - p4)
-            C = np.linalg.norm(p0 - p3)
-
-            if C == 0:
-                return 0.25
-
-            ear = (A + B) / (2.0 * C)
-            return float(np.clip(ear, 0.1, 0.4))
-        except Exception:
-            return 0.25
-
+    # ---------------- EYE ROI EXTRACTION ----------------
     def extract_eye_region(self, frame, eye_landmarks):
         """Extract eye ROI from frame"""
         try:
@@ -152,101 +243,7 @@ class RealTimeFusionDetector:
         except Exception:
             return None
 
-    # ---------------- ATTENTION FEATURE PIPELINE ----------------
-
-    def _update_gaze_and_attention_features(self, left_eye_landmarks, right_eye_landmarks, frame_shape):
-        """Compute gaze_x/y, gaze_velocity, entropy, fixation_stability."""
-        h, w = frame_shape[:2]
-
-        # Eye centers in pixel space (like preprocess)
-        left_eye_px = np.array([[lm.x * w, lm.y * h] for lm in left_eye_landmarks])
-        right_eye_px = np.array([[lm.x * w, lm.y * h] for lm in right_eye_landmarks])
-
-        left_center = np.mean(left_eye_px, axis=0)
-        right_center = np.mean(right_eye_px, axis=0)
-        avg_center = (left_center + right_center) / 2.0
-
-        # Normalize a bit to match training magnitude
-        gaze_x = float(avg_center[0] / 60.0)
-        gaze_y = float(avg_center[1] / 60.0)
-
-        angle = math.atan2(gaze_y, gaze_x)
-        magnitude = float(np.linalg.norm([gaze_x, gaze_y]))
-
-        # Append to history for temporal stats
-        gaze_point = {"gaze_x": gaze_x, "gaze_y": gaze_y}
-        self.gaze_history.append(gaze_point)
-
-        # Default values
-        gaze_velocity = 0.0
-        gaze_entropy = 0.0
-        fixation_stability = 0.5
-
-        if len(self.gaze_history) > 1:
-            # Velocity over history
-            velocities = []
-            for i in range(1, len(self.gaze_history)):
-                dx = self.gaze_history[i]["gaze_x"] - self.gaze_history[i - 1]["gaze_x"]
-                dy = self.gaze_history[i]["gaze_y"] - self.gaze_history[i - 1]["gaze_y"]
-                velocities.append(math.sqrt(dx * dx + dy * dy))
-
-            gaze_velocity = float(np.mean(velocities)) if velocities else 0.0
-
-            # Spread (entropy proxy)
-            points = np.array([[g["gaze_x"], g["gaze_y"]] for g in self.gaze_history])
-            gx_std = float(np.std(points[:, 0]))
-            gy_std = float(np.std(points[:, 1]))
-            gaze_entropy = float(math.sqrt(gx_std * gx_std + gy_std * gy_std))
-
-            # Fixation stability similar to preprocess
-            velocity_norm = 1.0 / (1.0 + gaze_velocity * 3.5)
-            fixation_stability = float(velocity_norm)
-
-        gaze_features = {
-            "gaze_x": gaze_x,
-            "gaze_y": gaze_y,
-            "gaze_angle": float(angle),
-            "gaze_magnitude": magnitude,
-            "gaze_velocity": gaze_velocity,
-            "gaze_entropy": gaze_entropy,
-            "fixation_stability": fixation_stability,
-        }
-
-        return gaze_features
-
-    def _predict_attention(self, feature_pack):
-        """Run attention model on current features."""
-        if not self.attention_enabled:
-            return None, None, None
-
-        try:
-            x = np.array(
-                [[feature_pack[col] for col in self.attention_features]],
-                dtype=float,
-            )
-            x_scaled = self.attention_scaler.transform(x)
-            att = float(self.attention_model.predict(x_scaled)[0])
-            att = float(np.clip(att, 0.0, 1.0))
-
-            # Categorize
-            if att < 0.35:
-                level = "LOW"
-                mind_wandering = True
-            elif att < 0.6:
-                level = "MEDIUM"
-                mind_wandering = False
-            else:
-                level = "HIGH"
-                mind_wandering = False
-
-            return att, level, mind_wandering
-
-        except Exception as e:
-            print(f"⚠️ Attention prediction error: {e}")
-            return None, None, None
-
     # ---------------- MAIN FRAME PROCESSING ----------------
-
     def process_frame(self, frame):
         """Process a single frame"""
         self.frame_count += 1
@@ -256,112 +253,97 @@ class RealTimeFusionDetector:
             results = self.face_mesh.process(rgb_frame)
 
             if not results.multi_face_landmarks:
+                # Reset blink state when face disappears
+                self.blink_state = "OPEN"
+                self.blink_start_time = 0
                 return None, frame
 
             face_landmarks = results.multi_face_landmarks[0]
+            h, w = frame.shape[:2]
 
-            # Extract eye landmarks
-            left_eye_landmarks = [face_landmarks.landmark[i] for i in self.LEFT_EYE_INDICES]
-            right_eye_landmarks = [face_landmarks.landmark[i] for i in self.RIGHT_EYE_INDICES]
+            # Calculate EAR using working method
+            left_ear = self.calculate_ear(face_landmarks.landmark, LEFT_EYE_EAR, w, h)
+            right_ear = self.calculate_ear(face_landmarks.landmark, RIGHT_EYE_EAR, w, h)
+            ear = (left_ear + right_ear) / 2.0
 
-            # EAR calculation
-            left_pts = np.array([[lm.x, lm.y] for lm in left_eye_landmarks], dtype=np.float32)
-            right_pts = np.array([[lm.x, lm.y] for lm in right_eye_landmarks], dtype=np.float32)
-
-            left_ear = self.calculate_ear(left_pts)
-            right_ear = self.calculate_ear(right_pts)
-            avg_ear = (left_ear + right_ear) / 2.0
-
-            # Update buffers
-            self.ear_buffer.append(avg_ear)
-            ear_threshold = 0.2
-            is_blink = 1 if avg_ear < ear_threshold else 0
-            self.blink_buffer.append(is_blink)
-
-            # Blink frequency
-            if len(self.blink_buffer) > 1:
-                blinks = sum(
-                    1
-                    for i in range(1, len(self.blink_buffer))
-                    if self.blink_buffer[i - 1] == 0 and self.blink_buffer[i] == 1
-                )
-                buffer_duration = len(self.blink_buffer) / 30.0
-                blink_frequency = (blinks / buffer_duration) * 60.0 if buffer_duration > 0 else 0.0
+            # Smooth the EAR value
+            self.ear_history.append(ear)
+            if len(self.ear_history) >= 3:
+                ear_smooth = np.median(self.ear_history)
             else:
-                blink_frequency = 0.0
+                ear_smooth = ear
+            
+            # Standardized eye open ratio (0-1)
+            if ear_smooth > self.ear_threshold:
+                # When eye is open, scale from threshold to 0.3
+                eye_open_ratio = np.clip((ear_smooth - 0.15) / 0.15, 0.0, 1.0)
+            else:
+                # When eye is closed, scale from 0 to threshold
+                eye_open_ratio = np.clip(ear_smooth / self.ear_threshold, 0.0, 1.0)
 
-            # Extract eye region
-            left_eye_roi = self.extract_eye_region(frame, left_eye_landmarks)
-            right_eye_roi = self.extract_eye_region(frame, right_eye_landmarks)
-            eye_roi = left_eye_roi if left_eye_roi is not None else right_eye_roi
+            # Detect blink
+            current_time = time.time()
+            blink_now = self.detect_blink(ear_smooth, current_time)
+            
+            # Single blink rate calculation (time-based, NOT frame-based)
+            blink_rate = self.calculate_blink_rate()
+
+            # Extract eye landmarks for ROI
+            LEFT_EYE_INDICES = [33, 7, 163, 144, 145, 153, 154, 155, 133, 173, 157, 158, 159, 160, 161, 246]
+            left_eye_landmarks = [face_landmarks.landmark[i] for i in LEFT_EYE_INDICES]
+            eye_roi = self.extract_eye_region(frame, left_eye_landmarks)
 
             if eye_roi is None:
                 return None, frame
 
-            # Build features for drowsiness fusion (existing)
+            # Build features for fusion
             features = {
                 "participant_id": 1,
                 "frame_id": self.frame_count,
                 "left_ear": left_ear,
                 "right_ear": right_ear,
-                "avg_ear": avg_ear,
-                "blink": 0,  # Simplified
+                "avg_ear": ear_smooth,
+                "blink": 1 if blink_now else 0,
                 "ear_asymmetry": float(abs(left_ear - right_ear)),
             }
 
-            # ---------- NEW: ATTENTION FEATURES ----------
-            gaze_features = self._update_gaze_and_attention_features(
-                left_eye_landmarks, right_eye_landmarks, frame.shape
-            )
-
-            # Merge EAR + gaze into single feature pack for attention model
-            attention_features_pack = {
-                "avg_ear": avg_ear,
-                "left_ear": left_ear,
-                "right_ear": right_ear,
-                "ear_asymmetry": float(abs(left_ear - right_ear)),
-                **gaze_features,
-            }
-
-            attention_score, attention_level, mind_wandering = self._predict_attention(
-                attention_features_pack
-            )
-
-            # Fusion prediction (fatigue/drowsiness)
+            # Fusion prediction
             fusion = self.fusion_engine.predict_from_eye_and_features(eye_roi, features)
-            fusion["avg_ear"] = float(avg_ear)
-            fusion["blink_frequency"] = float(blink_frequency)
-
-            # Attach attention outputs
-            if attention_score is not None:
-                fusion["attention_score"] = attention_score
-                fusion["attention_level"] = attention_level
-                fusion["mind_wandering"] = mind_wandering
+            
+            # Standardized naming
+            fusion["avg_ear"] = float(ear_smooth)
+            fusion["eye_open_ratio"] = float(eye_open_ratio)  # Consistent naming
+            fusion["blink_rate"] = float(blink_rate)  # Single blink rate
+            fusion["total_blinks"] = self.total_blinks
+            fusion["blink_state"] = self.blink_state
+            fusion["ear_threshold"] = float(self.ear_threshold)  # Debug info
 
             return fusion, frame
 
         except Exception as e:
-            if "attention_features" not in str(e):
-                print(f"⚠️ Frame processing error: {e}")
+            if self.frame_count % 30 == 0:  # Don't spam errors
+                print(f"Frame processing error: {e}")
             return None, frame
 
-    # ---------------- DRAWING ----------------
-
+    # ---------------- DISPLAY ----------------
     def draw_results(self, frame, result):
         """Draw overlay for current fusion result"""
         h, w = frame.shape[:2]
 
+        # Color map for states
         color_map = {
             "🟢 ALERT": (0, 255, 0),
             "🟡 SLIGHT FATIGUE": (0, 255, 255),
             "🟠 DROWSY": (0, 165, 255),
             "🔴 CRITICAL": (0, 0, 255),
         }
-        color = color_map.get(result["state_label"], (255, 255, 255))
+        state_label = result.get("state_label", "🟢 ALERT")
+        color = color_map.get(state_label, (255, 255, 255))
 
+        # Draw state
         cv2.putText(
             frame,
-            result["state_label"],
+            state_label,
             (20, 50),
             cv2.FONT_HERSHEY_SIMPLEX,
             1.0,
@@ -370,77 +352,89 @@ class RealTimeFusionDetector:
         )
 
         # Metrics
+        avg_ear = result.get('avg_ear', 0.0)
+        ear_threshold = result.get('ear_threshold', self.ear_threshold)
+        
         metrics = [
-            f"Fatigue: {result['fatigue_score']:.3f}",
-            f"Eye Open: {result['eye_open_prob']:.3f}",
-            f"Drowsy Prob: {result['drowsy_prob']:.3f}",
-            f"EAR: {result.get('avg_ear', 0.0):.3f}",
             f"Frame: {self.frame_count}",
+            f"EAR: {avg_ear:.3f}",
+            f"Eye Open: {result.get('eye_open_ratio', 0.0):.2f}",
+            f"Blinks: {result.get('total_blinks', 0)}",
+            f"Rate: {result.get('blink_rate', 0.0):.1f}/min",
+            f"State: {result.get('blink_state', 'OPEN')}",
+            f"Threshold: {ear_threshold:.3f}",
         ]
 
-        # Add attention metrics if present
-        if "attention_score" in result:
-            metrics.append(f"Attention: {result['attention_score']:.3f}")
-            metrics.append(f"Attn Level: {result.get('attention_level', 'N/A')}")
-            if result.get("mind_wandering", False):
-                metrics.append("Mind Wandering: YES")
-            else:
-                metrics.append("Mind Wandering: NO")
+        # Add fatigue metrics if available
+        if 'fatigue_score' in result:
+            metrics.insert(1, f"Fatigue: {result['fatigue_score']:.3f}")
+        if 'drowsy_prob' in result:
+            metrics.insert(2, f"Drowsy: {result['drowsy_prob']:.3f}")
 
+        metric_colors = [
+            (200, 200, 200),   # Frame - grey
+            (255, 255, 0),     # EAR - cyan
+            (255, 200, 0),     # Eye Open - blue/yellow
+            (0, 200, 255),     # Blinks - orange
+            (255, 100, 255),   # Rate - pink
+            (200, 255, 200),   # State - light green
+            (200, 200, 100),   # Threshold - muted yellow
+        ]
         for i, text in enumerate(metrics):
-            cv2.putText(
+           color = metric_colors[i] if i < len(metric_colors) else (255, 255, 255)
+           cv2.putText(
                 frame,
                 text,
                 (20, 90 + i * 30),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.6,
-                (255, 255, 255),
-                1,
+                color,
+                2,
             )
-
+            
         return frame
 
     # ---------------- WEBCAM LOOP ----------------
-
+    
     def run_webcam(self):
         """Run real-time webcam detection"""
-        print("📹 Starting webcam on camera index 0...")
+        print("Starting webcam on camera index 0...")
 
         cap = cv2.VideoCapture(0)
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720)
         cap.set(cv2.CAP_PROP_FPS, 30)
 
         if not cap.isOpened():
-            print("❌ Cannot access webcam at index 0")
+            print("Cannot access webcam at index 0")
             return
 
-        print("✅ Webcam started successfully!")
-        print("🎮 Controls: Press 'q' to quit, 'r' to reset buffers")
+        print("Webcam started successfully!")
+        print("Controls: Press 'q' to quit, 'r' to reset")
+        print("              '+' to increase threshold, '-' to decrease")
 
         while True:
             ret, frame = cap.read()
             if not ret:
-                print("❌ Cannot read frame from webcam")
+                print("Cannot read frame from webcam")
                 break
 
+            # Flip for mirror view
+            frame = cv2.flip(frame, 1)
+            
             result, processed_frame = self.process_frame(frame)
 
             if result is not None:
                 processed_frame = self.draw_results(processed_frame, result)
+                
+                # Print periodic updates
                 if self.frame_count % 30 == 0:
-                    att = result.get("attention_score", None)
-                    if att is not None:
-                        print(
-                            f"📊 Frame {self.frame_count}: {result['state_label']} | "
-                            f"Fatigue: {result['fatigue_score']:.3f} | "
-                            f"Attention: {att:.3f} ({result.get('attention_level')})"
-                        )
-                    else:
-                        print(
-                            f"📊 Frame {self.frame_count}: {result['state_label']} "
-                            f"(Fatigue: {result['fatigue_score']:.3f})"
-                        )
+                    print(
+                        f"Frame {self.frame_count}: {result.get('state_label', 'N/A')} | "
+                        f"EAR: {result.get('avg_ear', 0.0):.3f} | "
+                        f"Blinks: {result.get('total_blinks', 0)} | "
+                        f"Rate: {result.get('blink_rate', 0.0):.1f}/min"
+                    )
             else:
                 cv2.putText(
                     processed_frame,
@@ -452,34 +446,54 @@ class RealTimeFusionDetector:
                     2,
                 )
 
-            cv2.imshow("Fusion Drowsiness + Attention Detection", processed_frame)
+            cv2.imshow("Fusion Drowsiness Detection", processed_frame)
 
             key = cv2.waitKey(1) & 0xFF
             if key == ord("q"):
                 break
             elif key == ord("r"):
-                self.ear_buffer.clear()
-                self.blink_buffer.clear()
-                self.gaze_history.clear()
-                print("🔄 Buffers reset")
+                self.total_blinks = 0
+                self.blink_state = "OPEN"
+                self.blink_timestamps.clear()
+                self.last_minute_blinks.clear()
+                self.ear_history.clear()
+                print("All buffers reset")
+            elif key == ord("+"):
+                self.ear_threshold += 0.01
+                self.ear_threshold = min(0.3, self.ear_threshold)
+                print(f"Threshold increased to: {self.ear_threshold:.3f}")
+            elif key == ord("-"):
+                self.ear_threshold -= 0.01
+                self.ear_threshold = max(0.15, self.ear_threshold)
+                print(f"Threshold decreased to: {self.ear_threshold:.3f}")
 
         cap.release()
         cv2.destroyAllWindows()
-        print("👋 Webcam stopped")
+        
+        # Final stats
+        print("\n" + "=" * 60)
+        print("FINAL STATISTICS")
+        print("=" * 60)
+        print(f"Total Frames: {self.frame_count}")
+        print(f"Total Blinks Detected: {self.total_blinks}")
+        print(f"Final Blink Rate: {self.calculate_blink_rate():.1f}/min")
+        print(f"Final EAR Threshold: {self.ear_threshold:.3f}")
+        print("Webcam stopped")
 
 
 def main():
     print("=" * 60)
-    print("🧠 REAL-TIME FUSION DETECTOR + ATTENTION (MPIIGAZE)")
+    print("REAL-TIME FUSION DETECTOR WITH FIXED BLINK DETECTION")
     print("=" * 60)
 
     try:
         detector = RealTimeFusionDetector()
         detector.run_webcam()
+    except KeyboardInterrupt:
+        print("\n Stopped by user")
     except Exception as e:
-        print(f"💥 Critical error: {e}")
+        print(f" Critical error: {e}")
         import traceback
-
         traceback.print_exc()
 
 

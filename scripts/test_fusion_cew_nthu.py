@@ -2,19 +2,17 @@ import sys
 import numpy as np
 from pathlib import Path
 
-# ================= PATH CONFIG =================
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.fusion_cew_nthu import FusionCEWNTHU
+from src.fusion.fusion_cew_nthu import FusionCEWNTHU
 
 print("🧠 Testing Fusion Engine (CEW + NTHU)")
 
 try:
-    # Initialize fusion engine
     engine = FusionCEWNTHU()
 
-    # Test different scenarios
+    # Define test scenarios
     test_scenarios = [
         {
             "name": "ALERT DRIVER",

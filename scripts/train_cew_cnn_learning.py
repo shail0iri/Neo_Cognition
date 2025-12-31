@@ -24,10 +24,10 @@ from pathlib import Path
 # ================= PATH CONFIG =================
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-CSV_PATH = PROJECT_ROOT / "outputs" / "cew_processed_dataset.csv"
-DATA_ROOT = PROJECT_ROOT / "outputs" / "CEW_processed"
-MODELS_DIR = PROJECT_ROOT / "models"
-REPORTS_DIR = PROJECT_ROOT / "reports"
+CSV_PATH = PROJECT_ROOT / "outputs" / "CEW" / "cew_processed_dataset.csv"
+DATA_ROOT = PROJECT_ROOT / "data" / "processed" / "CEW_processed"
+MODELS_DIR = PROJECT_ROOT / "models" / "cew"
+REPORTS_DIR = PROJECT_ROOT / "reports" / "cew"
 
 IMG_SIZE = 80
 BATCH_SIZE = 16   # low RAM safe

@@ -1,5 +1,3 @@
-# src/analyze_mpiigaze.py
-
 import json
 import pandas as pd
 import matplotlib.pyplot as plt

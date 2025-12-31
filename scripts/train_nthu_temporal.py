@@ -1,12 +1,3 @@
-# =============================================================
-# ✅ NTHU TEMPORAL MODEL TRAINING - FIXED VERSION
-# Solves:
-# - invalid literal for int() with 'drowsy'
-# - robust label encoding
-# - safe preprocessing for temporal ML
-# Works with: nthu_features_optimized.csv
-# =============================================================
-
 import pandas as pd
 import numpy as np
 from pathlib import Path
@@ -22,16 +13,16 @@ print("✅ NTHU TEMPORAL TRAINING STARTED")
 # ================= PATH CONFIG =================
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
-CSV_PATH = PROJECT_ROOT / "outputs" / "nthu_features_optimized.csv"
-MODELS_DIR = PROJECT_ROOT / "models"
-REPORTS_DIR = PROJECT_ROOT / "reports"
+CSV_PATH = PROJECT_ROOT / "outputs" / "NTHU" / "nthu_features_optimized.csv"
+MODELS_DIR = PROJECT_ROOT / "models" / "nthu"
+REPORTS_DIR = PROJECT_ROOT / "reports" / "nthu"
 
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 LABEL_COL = "label"
 
-# ================= LOAD DATA =================
+
 print("📥 Loading NTHU features...")
 
 df = pd.read_csv(CSV_PATH)

@@ -1,28 +1,18 @@
-"""
-Build fusion dataset for multi-dataset multimodal training (Option C).
-
-- Aggregates Eyeblink8, NTHU, MPIIGAZE, CEW into one-row modality embeddings.
-- Produces per-block CLAS embeddings + a global CLAS embedding.
-- Concatenates all rows into outputs/fusion/fusion_dataset.csv
-
-Usage:
-    python src/fusion/build_fusion_dataset.py
-"""
 import os
 import sys
 import json
 import numpy as np
 import pandas as pd
 
-# ---------------- CONFIG (edit if you moved files) ----------------
+# ================= PATH CONFIG =================
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 DEFAULT_PATHS = {
     "eyeblink8": os.path.join(ROOT, "outputs", "eyeblink8", "eyeblink8_processed.csv"),
     "nthu":      os.path.join(ROOT, "outputs", "NTHU", "nthu_features_optimized.csv"),
     "mpiigaze":  os.path.join(ROOT, "outputs", "MPIIGAZE", "mpiigaze_features.csv"),
     "cew":       os.path.join(ROOT, "outputs", "CEW", "cew_processed_dataset.csv"),
-    "clas_features": os.path.join(ROOT, "data", "CLAS", "processed", "clas_features.csv"),
-    "clas_timeseries": os.path.join(ROOT, "data", "CLAS", "processed", "clas_timeseries.csv"),
+    "clas_features": os.path.join(ROOT, "data", "raw" , "CLAS", "processed", "clas_features.csv"),
+    "clas_timeseries": os.path.join(ROOT, "data", "raw" , "CLAS", "processed", "clas_timeseries.csv"),
 }
 
 OUT_DIR = os.path.join(ROOT, "outputs", "fusion")

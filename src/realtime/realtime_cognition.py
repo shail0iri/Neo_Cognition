@@ -2,18 +2,24 @@
 NEO-COGNITION - WORKING BLINK DETECTION
 Fixed blink counter and rate calculation
 """
-
+import csv
+import os
+from datetime import datetime
 import time
 import numpy as np
 import cv2
 import mediapipe as mp
 from collections import deque
 
+CSV_PATH = "logs/neo_cognition_session.csv"
+CSV_LOG_INTERVAL = 1.0  # seconds
+
+
 # ==================== CONFIG ====================
-EAR_THRESHOLD = 0.20  # Lowered for better sensitivity before 0.21
-EYE_OPEN_THRESHOLD = 0.22 # before 0.25
+EAR_THRESHOLD = 0.20  # Lowered for better sensitivity
+EYE_OPEN_THRESHOLD = 0.20
 MIN_BLINK_DURATION = 0.1  # 100ms minimum
-MAX_BLINK_DURATION = 1.5  # 400ms maximum before 0.4
+MAX_BLINK_DURATION = 0.4  # 400ms maximum
 WINDOW_NAME = "NeoCognition"
 
 # Correct eye landmarks
@@ -47,7 +53,7 @@ class WorkingFaceProcessor:
     def __init__(self, ear_threshold):
         self.mesh = mp.solutions.face_mesh.FaceMesh(
             max_num_faces=1,
-            refine_landmarks=True,
+            refine_landmarks=False,
             min_detection_confidence=0.6,
             min_tracking_confidence=0.6
         )
@@ -55,7 +61,7 @@ class WorkingFaceProcessor:
         # Store threshold as instance variable
         self.ear_threshold = ear_threshold
         
-        # Blink tracking - FIXED
+        # Blink tracking 
         self.total_blinks = 0
         self.blink_state = "OPEN"  # OPEN or CLOSED
         self.blink_start_time = 0
@@ -66,7 +72,13 @@ class WorkingFaceProcessor:
         
         # EAR history for smoothing
         self.ear_history = deque(maxlen=10)  # Shorter buffer for responsiveness
-        self.last_features = {"avg_ear": 0.25, "eye_open": 1.0, "ear_std": 0.0}
+        self.last_features = {
+            "avg_ear": 0.25, 
+            "eye_open": 1.0, 
+            "ear_std": 0.0,
+            "blink_state": "OPEN", 
+            "ear_raw": 0.25  
+        }
         
         # Debug
         self.debug_info = []
@@ -106,15 +118,18 @@ class WorkingFaceProcessor:
             eye_open = np.clip(ear_smooth / self.ear_threshold, 0.0, 1.0)
 
         # ===== ROBUST BLINK DETECTION =====
+        close_threshold = self.ear_threshold
+        open_threshold = close_threshold + 0.008  # Slight hysteresis
+        
         current_time = time.time()
         
         # State machine for blink detection
-        if ear_smooth < self.ear_threshold and self.blink_state == "OPEN":
+        if ear_smooth < close_threshold and self.blink_state == "OPEN":
             # Eye just closed - start potential blink
             self.blink_state = "CLOSED"
             self.blink_start_time = current_time
             
-        elif ear_smooth > EYE_OPEN_THRESHOLD and self.blink_state == "CLOSED":
+        elif ear_smooth > open_threshold and self.blink_state == "CLOSED":
             # Eye just opened - check if it was a valid blink
             blink_duration = current_time - self.blink_start_time
             
@@ -125,7 +140,7 @@ class WorkingFaceProcessor:
                 self.blink_timestamps.append(current_time)
                 self.last_minute_blinks.append(current_time)
                 blink_detected_now = True
-                
+            
             # Reset state regardless
             self.blink_state = "OPEN"
         
@@ -179,10 +194,18 @@ class RealisticEstimator:
             "s": deque(maxlen=12),
         }
         
-        self.last_values = {"c": 0, "a": 0, "f": 0, "s": 0}
+        self.last_values = {
+            "cognitive": 0.0,
+            "attention": 0.0,
+            "fatigue": 0.0,
+            "stress": 0.0,
+            "session_time": 0.0
+        }
+
 
     def estimate(self, blink_rate, eye_open, ear_std, face):
         if not face:
+            self.last_values["session_time"] = time.time() - self.start
             return self.last_values
 
         t = time.time() - self.start
@@ -244,13 +267,15 @@ def draw_working(frame, feat, states, face, blink_now, total_blinks, blink_rate,
                 cv2.FONT_HERSHEY_DUPLEX, 1.0, (0, 255, 255), 2)
     y += 50
     
-    # Eye metrics
-    ear_color = (0, 255, 0) if feat['avg_ear'] > ear_threshold else (0, 0, 255)
-    cv2.putText(frame, f"EAR: {feat['avg_ear']:.3f}", (30, y),
+    # Eye metrics (use .get() with defaults for safety)
+    avg_ear = feat.get('avg_ear', 0.25)
+    ear_color = (0, 255, 0) if avg_ear > ear_threshold else (0, 0, 255)
+    cv2.putText(frame, f"EAR: {avg_ear:.3f}", (30, y),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.8, ear_color, 2)
     y += 35
     
-    cv2.putText(frame, f"Eye Open: {feat['eye_open']*100:.1f}%", (30, y),
+    eye_open = feat.get('eye_open', 1.0)
+    cv2.putText(frame, f"Eye Open: {eye_open*100:.1f}%", (30, y),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 200, 255), 2)
     y += 35
     
@@ -265,14 +290,16 @@ def draw_working(frame, feat, states, face, blink_now, total_blinks, blink_rate,
     cv2.putText(frame, rate_text, (30, y),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.75, (255, 200, 100), 2)
     y += 35
-    # Blink indicator
+    
+    # Blink indicator (use .get() for safety)
     if blink_now:
         cv2.putText(frame, "BLINK!", (30, y),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.9, (0, 0, 255), 3)
         y += 35
-    elif feat['blink_state'] == "CLOSED":
+    elif 'blink_state' in feat and feat['blink_state'] == "CLOSED":
         cv2.putText(frame, "EYE CLOSED", (30, y),
                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 100, 255), 2)
+        y += 35
     
     y += 35
     
@@ -282,10 +309,10 @@ def draw_working(frame, feat, states, face, blink_now, total_blinks, blink_rate,
     y += 30
     
     state_info = [
-        (f"Load: {states['cognitive']:.1f}%", (255, 255, 255)),
-        (f"Attention: {states['attention']:.1f}%", (0, 200, 255)),
-        (f"Fatigue: {states['fatigue']:.1f}%", (255, 150, 0)),
-        (f"Stress: {states['stress']:.1f}%", (255, 50, 50))
+        (f"Load: {states.get('cognitive', 0):.1f}%", (255, 255, 255)),
+        (f"Attention: {states.get('attention', 0):.1f}%", (0, 200, 255)),
+        (f"Fatigue: {states.get('fatigue', 0):.1f}%", (255, 150, 0)),
+        (f"Stress: {states.get('stress', 0):.1f}%", (255, 50, 50))
     ]
     
     for text, color in state_info:
@@ -294,7 +321,7 @@ def draw_working(frame, feat, states, face, blink_now, total_blinks, blink_rate,
         y += 30
     
     # Right panel
-    status = "✅ TRACKING" if face else "❌ NO FACE"
+    status = "TRACKING" if face else " NO FACE"
     status_color = (0, 255, 0) if face else (0, 0, 255)
     
     cv2.putText(frame, status, (w - 220, 40),
@@ -304,7 +331,7 @@ def draw_working(frame, feat, states, face, blink_now, total_blinks, blink_rate,
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
     
     # Session time
-    mins, secs = divmod(int(states['session_time']), 60)
+    mins, secs = divmod(int(states.get('session_time', 0)), 60)
     cv2.putText(frame, f"Time: {mins:02d}:{secs:02d}", (w - 220, 110),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
     
@@ -318,8 +345,46 @@ def draw_working(frame, feat, states, face, blink_now, total_blinks, blink_rate,
     
     return frame
 
+def init_csv():
+    os.makedirs(os.path.dirname(CSV_PATH), exist_ok=True)
+
+    if not os.path.exists(CSV_PATH):
+        with open(CSV_PATH, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([
+                "timestamp",
+                "ear",
+                "eye_open",
+                "total_blinks",
+                "blink_rate",
+                "cognitive",
+                "attention",
+                "fatigue",
+                "stress"
+            ])
+
+
+def log_to_csv(feat, states, blink_rate, total_blinks):
+    with open(CSV_PATH, "a", newline="") as f:
+        writer = csv.writer(f)
+        writer.writerow([
+            datetime.now().isoformat(timespec="seconds"),
+            round(feat["avg_ear"], 4),
+            round(feat["eye_open"], 3),
+            total_blinks,
+            round(blink_rate, 2),
+            round(states["cognitive"], 1),
+            round(states["attention"], 1),
+            round(states["fatigue"], 1),
+            round(states["stress"], 1)
+        ])
+
+
 # ==================== MAIN ====================
 def main():
+    init_csv()
+    last_csv_log_time = time.time()
+
     # Use a mutable container for threshold so we can modify it
     current_threshold = EAR_THRESHOLD
     
@@ -343,7 +408,7 @@ def main():
     
     cap = cv2.VideoCapture(0)
     if not cap.isOpened():
-        print("❌ Cannot open camera")
+        print("Cannot open camera")
         return
     
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280)
@@ -376,12 +441,21 @@ def main():
         
         # Check if blink count increased
         if proc.total_blinks > last_blink_count:
-            print(f"✅ Blink detected! Total: {proc.total_blinks}")
+            print(f"Blink detected! Total: {proc.total_blinks}")
             last_blink_count = proc.total_blinks
         
         # Estimate states
         states = est.estimate(blink_rate, feat["eye_open"], feat["ear_std"], face)
         
+        if time.time() - last_csv_log_time >= CSV_LOG_INTERVAL:
+            log_to_csv(
+                feat=feat,
+                states=states,
+                blink_rate=blink_rate,
+                total_blinks=proc.total_blinks
+            )
+            last_csv_log_time = time.time()
+
         # Draw
         frame = draw_working(frame, feat, states, face, blink_now, 
                            proc.total_blinks, blink_rate, fps, current_threshold)
@@ -433,51 +507,49 @@ def main():
     cap.release()
     cv2.destroyAllWindows()
     
+    # Final stats
         # Final stats
     print("\n" + "=" * 60)
-    print("📊 FINAL STATISTICS")
+    print("FINAL STATISTICS")
     print("=" * 60)
     
     duration = time.time() - est.start
     
-    # Session average blink rate
+    # Calculate session average rate
     if duration > 0:
         session_rate = (proc.total_blinks / duration) * 60.0
     else:
         session_rate = 0.0
-
-    print(f"\n⏱️  Duration: {duration:.1f}s")
-    print(f"👁️  Total Blinks Detected: {proc.total_blinks}")
-    print(f"📈 Session Average: {session_rate:.1f}/min")
-    print(f"📊 Final 60s Rate: {blink_rate:.1f}/min")
+    
+    print(f"\n Duration: {duration:.1f}s")
+    print(f"Total Blinks Detected: {proc.total_blinks}")
+    print(f"Session Average: {session_rate:.1f}/min")
+    print(f"Final 60s Rate: {blink_rate:.1f}/min")
     
     if proc.ear_history:
-        print(f"📊 EAR Statistics:")
+        print(f"EAR Statistics:")
         print(f"   • Average: {np.mean(proc.ear_history):.3f}")
         print(f"   • Minimum: {np.min(proc.ear_history):.3f}")
         print(f"   • Maximum: {np.max(proc.ear_history):.3f}")
-    
-    print(f"\n🧠 Final Cognitive States:")
+
+    print(f"\nFinal Cognitive States:")
     print(f"   • Load: {states['cognitive']:.1f}%")
     print(f"   • Attention: {states['attention']:.1f}%")
     print(f"   • Fatigue: {states['fatigue']:.1f}%")
     print(f"   • Stress: {states['stress']:.1f}%")
     
-       # Interpretation based on session average (overall behavior)
-    if session_rate < 5:
-        blink_feedback = "Focused / Deep Concentration"
-    elif session_rate < 15:
-        blink_feedback = "Normal Focus"
-    elif session_rate <= 25:
-        blink_feedback = "Relaxed / Distracted"
+    # Blink rate interpretation
+        # Blink rate interpretation (use session average)
+    if session_rate < 8:
+        blink_feedback = "Low blink rate overall (normal: 15-20/min)"
+    elif session_rate < 25:
+        blink_feedback = "Normal blink rate overall"
     else:
-        blink_feedback = "Fatigue / Stress"
+        blink_feedback = "High blink rate overall"
     
-    # Additional note about final minute
-    if abs(session_rate - blink_rate) > 10:  # Big difference between session avg and final minute
-        print(f"   Note: Final minute rate ({blink_rate:.1f}/min) differs significantly from session average")
-    print(f"\n👁️  Blink Feedback: {blink_feedback}")
-    print("\n👋 Session ended")
+    print(f"\n Overall Feedback: {blink_feedback}")
+    print("\nSession ended")
+
 
 if __name__ == "__main__":
     main()

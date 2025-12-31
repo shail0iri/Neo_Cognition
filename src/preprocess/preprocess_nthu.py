@@ -9,7 +9,6 @@ import re
 
 class OptimizedNTHUPreprocessor:
     def __init__(self, frame_interval=3):
-        # ✅ YOUR CORRECT PATH FIXED HERE
         self.NTHU_PATH = Path(r"C:\Users\Shail\Downloads\neo_cognition\data\NTHU_ DDD")
 
         self.OUT_CSV = Path(r"C:\Users\Shail\Downloads\neo_cognition\outputs\nthu_features_optimized.csv")

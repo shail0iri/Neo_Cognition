@@ -3,10 +3,7 @@ import re
 import pandas as pd
 
 
-# =========================================================
-# CONFIG (MATCHES YOUR REAL PROJECT STRUCTURE)
-# =========================================================
-
+# ================= PATH CONFIG =================
 BASE = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "..", "data", "CLAS")
 )
@@ -20,9 +17,6 @@ OUT = os.path.join(BASE, "processed")
 os.makedirs(OUT, exist_ok=True)
 
 
-# =========================================================
-# HELPERS
-# =========================================================
 
 def safe_load_csv(path):
     try:
@@ -230,10 +224,6 @@ def extract_features(df):
     print(f"💾 Features saved → {outpath}")
     return agg
 
-
-# =========================================================
-# MAIN
-# =========================================================
 
 if __name__ == "__main__":
     print("\n🚀 Starting CLAS Preprocessing...\n")

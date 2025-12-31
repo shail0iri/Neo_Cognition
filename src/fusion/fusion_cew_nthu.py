@@ -1,25 +1,10 @@
-"""
-FusionCEWNTHU: small helper class to combine CEW eye-state CNN + NTHU-style features.
-
-Main API used by:
-  - realtime_cognition.py  ->  predict_eye_state(eye_img)
-  - notebooks/test_fusion_cew_nthu.py -> predict_from_eye_and_features(eye_img, features_dict)
-
-This version:
-  - Loads CEW model from models/cew_best.keras or models/cew_final.keras
-  - Accepts eye crops as BGR or grayscale numpy arrays
-  - Returns (p_open, p_closed) in [0,1]
-  - Optionally computes simple EAR-based metrics from provided features
-"""
 
 import os
 import sys
 import numpy as np
 import cv2
 
-# ------------------------------------------------------------------
-# Add project root to sys.path so `src.*` imports work everywhere
-# ------------------------------------------------------------------
+# ================= PATH CONFIG =================
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
@@ -32,9 +17,7 @@ except Exception:
     TF_AVAILABLE = False
 
 
-# ------------------------------------------------------------------
-# Utility functions
-# ------------------------------------------------------------------
+# ---------------- helpers ----------------
 def preprocess_eye_for_cew(eye_img, target_size=(80, 80)):
     """
     Takes an eye crop (H,W) or (H,W,3) in BGR / gray.
@@ -92,9 +75,7 @@ def _compute_ear_from_values(left_ear=None, right_ear=None):
     return le, re, float(avg), float(asym)
 
 
-# ------------------------------------------------------------------
-# Main class
-# ------------------------------------------------------------------
+#================= FUSION CLASS(Main) =================
 class FusionCEWNTHU:
     def __init__(self, base_dir=None, cew_model_path=None, input_size=(80, 80)):
         """
@@ -113,8 +94,8 @@ class FusionCEWNTHU:
         if cew_model_path:
             self.candidate_paths.append(cew_model_path)
         # default candidates
-        self.candidate_paths.append(os.path.join(self.base_dir, "models", "cew_best.keras"))
-        self.candidate_paths.append(os.path.join(self.base_dir, "models", "cew_final.keras"))
+        self.candidate_paths.append(os.path.join(self.base_dir, "models", "cew", "cew_best.keras"))
+        self.candidate_paths.append(os.path.join(self.base_dir, "models", "cew", "cew_final.keras"))
 
         self.cew_model = None
         self.cew_model_path = None
@@ -145,7 +126,7 @@ class FusionCEWNTHU:
         """
         # If we have a real CEW model, use it
         if self.cew_model is not None:
-            x = _preprocess_eye_for_cew(eye_img, target_size=self.input_size)
+            x = preprocess_eye_for_cew(eye_img, target_size=self.input_size)
             if x is None:
                 return 0.5, 0.5
             try:

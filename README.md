@@ -1,53 +1,113 @@
 # Neo-Cognition
 
-A practical machine-learning project focused on real-time cognitive state estimation using computer vision, temporal modeling, and experiment tracking.
+A practical machine-learning project for real-time cognitive-state estimation using computer vision, temporal modeling, and experiment tracking.
 
-This repository brings together multiple components of an applied ML system: data preparation, model training, evaluation, logging, and a real-time inference path. The goal is not just to train models, but to build a project that behaves like a real engineering workflow rather than a single notebook experiment.
+Neo-Cognition is designed to show how an AI system can move from raw data to a working real-time application. It combines eye-state analysis, blink dynamics, temporal features, and model evaluation into one end-to-end pipeline that can be explained clearly in interviews and technical discussions.
 
-## What this project is
+---
 
-Neo-Cognition is a multimodal AI project for estimating human cognitive states such as alertness, drowsiness, attention, and fatigue from visual cues and time-based behavior. The core idea is to combine:
+## 1. Project overview
 
-- eye-state analysis,
-- blink dynamics,
-- temporal features,
-- and lightweight model evaluation in a reproducible pipeline.
+Neo-Cognition estimates human cognitive states such as:
 
-It is designed to be useful both as a research project and as a portfolio project for interviews and technical discussions.
+- alertness
+- drowsiness
+- attention
+- fatigue
+- stress and cognitive load
 
-## Why this repository stands out
+The system uses visual cues from webcam input and time-based behavior to produce estimates in real time. The main focus is not only on model accuracy, but also on building a deployable, structured, and reproducible ML workflow.
 
-This project is not only about model training. It includes:
+This project is especially useful for demonstrating:
 
-- a real-time inference path for webcam-based analysis,
-- modular training scripts for different model families,
-- MLflow experiment tracking for reproducibility,
-- evaluation outputs and saved artifacts,
-- and a structured project layout that is easier to explain in interviews.
+- applied machine learning
+- computer vision
+- real-time inference
+- experiment tracking
+- modular project design
 
-That makes it a good example of end-to-end ML engineering rather than a one-off experiment.
+---
 
-## Current project scope
+## 2. Why this project stands out
 
-The repository currently supports:
+This repository is more than a training notebook. It includes:
+
+- a real-time inference path for webcam analysis
+- modular training scripts for different model families
+- MLflow experiment tracking for reproducibility
+- saved model artifacts and evaluation outputs
+- a clean project structure suitable for portfolio presentation
+
+That makes it a strong example of end-to-end ML engineering rather than a one-off experiment.
+
+---
+
+## 3. Core capabilities
+
+The project currently supports the following areas:
 
 - CEW-based eye-state classification
-- blink detection and model comparison
-- NTHU temporal drowsiness modeling
-- attention / gaze-related modeling using MPIIGaze-style data
-- MLflow-based experiment tracking and run comparison
+- blink detection and blink-rate estimation
+- temporal drowsiness modeling using NTHU-style data
+- attention and gaze-related modeling using MPIIGaze-style signals
+- multimodal fusion and evaluation pipelines
+- MLflow-based experiment comparison
 
-## Quick start
+---
 
-### 1. Environment
+## 4. Key technical highlights
+
+The system addresses real-world engineering challenges, not just model training:
+
+- robust blink detection using EAR-based logic
+- temporal smoothing to reduce noisy frame-level fluctuations
+- hysteresis and state-machine logic for more reliable blink detection
+- rolling-window blink-rate estimation
+- CPU-optimized real-time processing for webcam use
+- structured local logging and analysis outputs
+
+These are the kinds of details that interviewers usually appreciate because they show practical engineering judgment.
+
+---
+
+## 5. Tech stack
+
+- Python 3.8+
+- OpenCV
+- MediaPipe
+- TensorFlow / Keras
+- PyTorch
+- Scikit-learn
+- XGBoost
+- NumPy / Pandas
+- Matplotlib / Seaborn
+- MLflow
+
+---
+
+## 6. Project structure
+
+- scripts/ — training, evaluation, and model experiments
+- src/ — preprocessing, fusion, and real-time inference logic
+- outputs/ — processed outputs, summaries, and analysis artifacts
+- models/ — saved model checkpoints and final model files
+- reports/ — training history and evaluation reports
+- notebooks/ — exploratory analysis and experimentation
+- logs/ — runtime session and tracking outputs
+
+---
+
+## 7. Quick start
+
+### Environment setup
 
 ```bash
 python -m venv venv
-source venv/bin/activate      # Windows: venv\Scripts\activate
+source venv/bin/activate          # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-### 2. Run the training scripts
+### Run the training workflow
 
 ```bash
 python scripts/train_cew_cnn_learning.py
@@ -56,7 +116,7 @@ python scripts/train_nthu_temporal.py
 python scripts/train_attention_model_mpii.py
 ```
 
-### 3. Start MLflow UI
+### Start MLflow UI
 
 ```bash
 python -m mlflow ui --host 127.0.0.1 --port 5000 \
@@ -64,70 +124,65 @@ python -m mlflow ui --host 127.0.0.1 --port 5000 \
   --default-artifact-root C:/path/to/neo_cognition_mlflow/mlruns
 ```
 
-### 4. Run the live system
+### Run the real-time system
 
 ```bash
 python src/realtime/realtime_cognition.py
 ```
 
-## What I have implemented
+---
 
-- Training pipelines for multiple model types
-- MLflow logging for parameters, metrics, and artifacts
-- CEW data-path handling for stable local execution
-- Structured outputs for evaluation and analysis
-- A real-time inference flow for webcam-based cognitive-state estimation
+## 8. Verified project status
 
-## Verified results (latest run)
-
-The following results were verified from the current project setup:
+The current repository has been set up and verified for end-to-end execution with the following observed results:
 
 - CEW CNN: 80.61% test accuracy, 0.4096 test loss
 - Blink classifier: 80.79% best accuracy, AUC 0.6974
-- NTHU model: Random Forest 82.15%, XGBoost 82.72%
-- Attention / MPIIGAZE model: R² 0.9996, RMSE 0.0022
+- NTHU modeling: Random Forest 82.15%, XGBoost 82.72%
+- Attention / MPIIGaze-related modeling: R² 0.9996, RMSE 0.0022
 
-These numbers show that the project is functioning end to end, and the experiments are being tracked in MLflow rather than being left as ad-hoc outputs.
+These outcomes indicate that the project is working as a real ML pipeline with reproducible outputs rather than as a static demo.
 
-## Project structure
+---
 
-- scripts/ — training and evaluation scripts
-- src/ — preprocessing, fusion, and realtime inference logic
-- outputs/ — generated analysis and processed summaries
-- models/ — saved model checkpoints and final model files
-- reports/ — training history and evaluation artifacts
-- notebooks/ — exploratory analysis and experiments
+## 9. Why this is a strong interview project
 
-## Notes on datasets and artifacts
+This project demonstrates that I can handle the complete ML lifecycle:
 
-Large datasets, generated model files, and experiment artifacts are intentionally not included in this repository for size and reproducibility reasons. The code and pipeline are structured so the project can be run locally with the appropriate data folder setup.
+1. define a real problem
+2. prepare and process data
+3. train and compare models
+4. evaluate outcomes honestly
+5. track experiments for reproducibility
+6. build a practical inference path for real users
 
-## Tech stack
+It is a strong example of practical ML engineering because it combines:
 
-- Python
-- TensorFlow / Keras
-- PyTorch
-- Scikit-learn
-- XGBoost
-- OpenCV
-- Pandas / NumPy
-- Matplotlib / Seaborn
-- MLflow
+- model development
+- system design
+- real-time constraints
+- evaluation discipline
+- project communication
 
-## Why this is useful for an interview
+---
 
-This project demonstrates that I can work across the full ML lifecycle:
+## 10. Notes on datasets and artifacts
 
-- understand the problem,
-- build and train models,
-- evaluate results honestly,
-- log experiments for comparison,
-- and structure the project for real-world use.
+Large datasets, trained models, and generated experiment files are intentionally not included in this repository because of size and reproducibility considerations. The codebase is structured so the project can be run locally with the appropriate dataset folders and environment setup.
 
-It is a good example of a practical ML engineering project rather than a generic tutorial repository.
+---
 
-## Author
+## 11. Future direction
+
+Possible next steps include:
+
+- improving model robustness across lighting conditions
+- adding more automated evaluation reports
+- integrating richer visualization and dashboards
+- expanding the fusion layer for more complete cognitive-state estimation
+
+---
+
+## 12. Author
 
 Shail Giri
-
-ML Engineer | Computer Vision | Multimodal AI | Real-Time Systems

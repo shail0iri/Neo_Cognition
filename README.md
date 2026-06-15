@@ -180,9 +180,3 @@ Possible next steps include:
 - adding more automated evaluation reports
 - integrating richer visualization and dashboards
 - expanding the fusion layer for more complete cognitive-state estimation
-
----
-
-## 12. Author
-
-Shail Giri

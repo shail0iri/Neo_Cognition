@@ -16,6 +16,8 @@ from sklearn.metrics import classification_report, confusion_matrix
 import matplotlib.pyplot as plt
 import seaborn as sns
 import cv2
+import mlflow
+import mlflow.keras
 
 print("✅ CEW CNN FINAL STABLE TRAINING STARTED")
 
@@ -23,6 +25,7 @@ from pathlib import Path
 
 # ================= PATH CONFIG =================
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+TRACKING_URI = f"sqlite:///{(PROJECT_ROOT / 'mlflow.db').resolve().as_posix()}"
 
 CSV_PATH = PROJECT_ROOT / "outputs" / "CEW" / "cew_processed_dataset.csv"
 DATA_ROOT = PROJECT_ROOT / "data" / "processed" / "CEW_processed"
@@ -35,6 +38,10 @@ EPOCHS = 20
 
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+mlflow.set_tracking_uri(TRACKING_URI)
+mlflow.set_experiment("neo_cognition_cew")
+mlflow.start_run(run_name="cew_cnn")
+mlflow.log_params({"img_size": IMG_SIZE, "batch_size": BATCH_SIZE, "epochs": EPOCHS, "optimizer": "adam", "lr": 1e-4})
 
 
 # ================= LOAD CSV =================
@@ -42,9 +49,43 @@ print("📥 Loading dataset...")
 
 df = pd.read_csv(CSV_PATH)
 
-# Ensure paths are valid
+
+def normalize_cew_path(file_path, split_name):
+    candidate = Path(file_path)
+    if candidate.exists():
+        return str(candidate)
+
+    # Common case: old CSVs still point to a previous machine path.
+    fallback = DATA_ROOT / split_name / candidate.name
+    if fallback.exists():
+        return str(fallback)
+
+    fallback2 = DATA_ROOT / candidate.name
+    if fallback2.exists():
+        return str(fallback2)
+
+    # Fallback for legacy paths under the old CEW_processed directory.
+    if "CEW_processed" in str(candidate):
+        try:
+            rel_parts = candidate.parts[candidate.parts.index("CEW_processed") + 1:]
+            legacy_fallback = DATA_ROOT.joinpath(*rel_parts)
+            if legacy_fallback.exists():
+                return str(legacy_fallback)
+        except ValueError:
+            pass
+
+    return str(candidate)
+
+
+# Normalize legacy file paths to the current repository layout.
+df['file_path'] = df.apply(lambda row: normalize_cew_path(row['file_path'], row['split']), axis=1)
+
+# Ensure paths are valid after normalization.
 existing_mask = df['file_path'].apply(lambda x: os.path.exists(str(x)))
 df = df[existing_mask].reset_index(drop=True)
+
+if df.empty:
+    raise ValueError("No CEW image files were found after path normalization. Check data/processed/CEW_processed and outputs/CEW/cew_processed_dataset.csv.")
 
 print("✅ Dataset loaded:")
 print(df[['split','label']].value_counts())
@@ -151,6 +192,8 @@ print("💾 Model saved")
 # ================= EVALUATION =================
 print("🧪 Testing...")
 loss, acc = model.evaluate(test_ds)
+mlflow.log_metric("test_accuracy", round(float(acc), 4))
+mlflow.log_metric("test_loss", round(float(loss), 4))
 print(f"Accuracy: {acc:.4f}")
 
 # Predictions
@@ -182,3 +225,6 @@ plt.savefig(REPORTS_DIR /  "accuracy_curve.png")
 plt.show()
 
 print("✅ TRAINING COMPLETED SUCCESSFULLY")
+mlflow.log_artifact(str(REPORTS_DIR / "training_history.csv"))
+mlflow.keras.log_model(model, "cew_model")
+mlflow.end_run()

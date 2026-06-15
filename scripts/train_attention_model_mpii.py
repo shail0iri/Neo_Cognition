@@ -10,9 +10,11 @@ import joblib
 import matplotlib.pyplot as plt
 import seaborn as sns
 import json
+import mlflow
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+TRACKING_URI = f"sqlite:///{(PROJECT_ROOT / 'mlflow.db').resolve().as_posix()}"
 
 
 def load_data(base_dir: Path):
@@ -50,6 +52,10 @@ def train_attention_model(base_dir: Path):
     X_train, X_test, y_train, y_test = train_test_split(
         X, y, test_size=0.2, random_state=42
     )
+    mlflow.set_tracking_uri(TRACKING_URI)
+    mlflow.set_experiment("neo_cognition_attention")
+    mlflow.start_run(run_name="attention_xgboost")
+    mlflow.log_params({"n_estimators": 300, "max_depth": 6, "lr": 0.1, "test_size": 0.2})
 
     scaler = StandardScaler()
     X_train_scaled = scaler.fit_transform(X_train)
@@ -74,6 +80,9 @@ def train_attention_model(base_dir: Path):
     mse = mean_squared_error(y_test, y_pred)
     rmse = np.sqrt(mse)
     r2 = r2_score(y_test, y_pred)
+    mlflow.log_metric("r2_score", round(float(r2), 4))
+    mlflow.log_metric("rmse", round(float(rmse), 4))
+    mlflow.log_metric("mse", round(float(mse), 4))
 
     print("\n📈 PERFORMANCE")
     print(f"MSE  : {mse:.4f}")
@@ -120,6 +129,7 @@ def train_attention_model(base_dir: Path):
 
     print("\n✅ MODEL SAVED SUCCESSFULLY")
     print(models_dir)
+    mlflow.end_run()
 
 
 def main():

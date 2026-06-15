@@ -3,15 +3,17 @@ import numpy as np
 from pathlib import Path
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import classification_report, confusion_matrix
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 from sklearn.ensemble import RandomForestClassifier
 import xgboost as xgb
 import joblib
+import mlflow
 
 print("✅ NTHU TEMPORAL TRAINING STARTED")
 
 # ================= PATH CONFIG =================
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+TRACKING_URI = f"sqlite:///{(PROJECT_ROOT / 'mlflow.db').resolve().as_posix()}"
 
 CSV_PATH = PROJECT_ROOT / "outputs" / "NTHU" / "nthu_features_optimized.csv"
 MODELS_DIR = PROJECT_ROOT / "models" / "nthu"
@@ -19,6 +21,10 @@ REPORTS_DIR = PROJECT_ROOT / "reports" / "nthu"
 
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
 REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+mlflow.set_tracking_uri(TRACKING_URI)
+mlflow.set_experiment("neo_cognition_nthu")
+mlflow.start_run(run_name="nthu_temporal")
+mlflow.log_params({"rf_estimators": 200, "xgb_estimators": 300, "test_size": 0.25, "xgb_lr": 0.05})
 
 LABEL_COL = "label"
 
@@ -122,6 +128,7 @@ rf_preds = rf.predict(X_test)
 
 print("\n📊 RandomForest Report")
 print(classification_report(y_test, rf_preds))
+mlflow.log_metric("rf_accuracy", round(accuracy_score(y_test, rf_preds), 4))
 
 joblib.dump(rf, MODELS_DIR / "nthu_rf_model.pkl")
 
@@ -144,6 +151,7 @@ xgb_preds = (xgb_model.predict_proba(X_test)[:, 1] > 0.5).astype(int)
 
 print("\n📊 XGBoost Report")
 print(classification_report(y_test, xgb_preds))
+mlflow.log_metric("xgb_accuracy", round(accuracy_score(y_test, xgb_preds), 4))
 
 joblib.dump(xgb_model, MODELS_DIR / "nthu_xgb_model.pkl")
 
@@ -153,3 +161,4 @@ print(confusion_matrix(y_test, xgb_preds))
 
 print("✅ NTHU TEMPORAL MODEL TRAINING COMPLETE")
 print("Models saved in:", MODELS_DIR)
+mlflow.end_run()

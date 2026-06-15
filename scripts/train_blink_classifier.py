@@ -14,16 +14,22 @@ from sklearn.preprocessing import StandardScaler
 import matplotlib.pyplot as plt
 import seaborn as sns
 import joblib
+import mlflow
 import os
 
 from pathlib import Path
 
 # ================= PATH CONFIG =================
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+TRACKING_URI = f"sqlite:///{(PROJECT_ROOT / 'mlflow.db').resolve().as_posix()}"
 
 DATA_PATH = PROJECT_ROOT / "outputs" / "eyeblink8" / "eyeblink8_processed.csv"
 MODEL_DIR = PROJECT_ROOT / "models" / "blink_detection"
 MODEL_DIR.mkdir(parents=True, exist_ok=True)
+mlflow.set_tracking_uri(TRACKING_URI)
+mlflow.set_experiment("neo_cognition_blink")
+mlflow.start_run(run_name="blink_classifier")
+mlflow.log_params({"models_compared": 3, "rf_estimators": 200, "test_size": 0.3})
 
 
 print("🚀 TRAINING BLINK CLASSIFIER (ROBUST VERSION)")
@@ -195,6 +201,10 @@ for name, model in models.items():
 
 # ================= SELECT BEST =================
 best_name = max(results, key=lambda x: results[x]["auc"])
+mlflow.log_param("best_model", best_name)
+mlflow.log_metric("best_auc", round(results[best_name]["auc"], 4))
+mlflow.log_metric("best_accuracy", round(results[best_name]["accuracy"], 4))
+mlflow.log_metric("best_threshold", round(results[best_name]["threshold"], 4))
 best_model = results[best_name]["model"]
 BEST_THRESHOLD = results[best_name]["threshold"]
 
@@ -224,6 +234,10 @@ joblib.dump(scaler, MODEL_DIR / "scaler.pkl")
 joblib.dump(feature_columns, MODEL_DIR / "features.pkl")
 joblib.dump(BEST_THRESHOLD, MODEL_DIR / "threshold.pkl")
 
+mlflow.log_artifact(str(MODEL_DIR / "blink_classifier.pkl"))
+mlflow.log_artifact(str(MODEL_DIR / "scaler.pkl"))
+mlflow.log_artifact(str(MODEL_DIR / "features.pkl"))
+mlflow.log_artifact(str(MODEL_DIR / "threshold.pkl"))
 
 print("\n✅ Model + Threshold saved")
 
@@ -250,3 +264,4 @@ def predict_blink(features_dict):
         "is_blink": bool(pred),
     }
 print("\n🚀 Prediction Function Ready")
+mlflow.end_run()

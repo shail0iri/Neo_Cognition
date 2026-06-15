@@ -10,11 +10,11 @@ from sklearn.model_selection import train_test_split
 
 class CEWFullPreprocessor:
     def __init__(self):
-        self.CEW_PATH = Path(r"C:\Users\Shail\Downloads\neo_cognition\data\CEW")
+        self.PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
-        self.OUT_CSV = Path(r"C:\Users\Shail\Downloads\neo_cognition\outputs\cew_processed_dataset.csv")
-
-        self.PROCESSED_DIR = Path(r"C:\Users\Shail\Downloads\neo_cognition\outputs\CEW_processed")
+        self.CEW_PATH = self.PROJECT_ROOT / "data" / "raw" / "CEW"
+        self.OUT_CSV = self.PROJECT_ROOT / "outputs" / "CEW" / "cew_processed_dataset.csv"
+        self.PROCESSED_DIR = self.PROJECT_ROOT / "data" / "processed" / "CEW_processed"
 
         self.IMG_SIZE = (80, 80)
         self.RANDOM_SEED = 42
